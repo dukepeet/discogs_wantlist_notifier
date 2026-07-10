@@ -2,8 +2,8 @@ name: Check Discogs wantlist for new versions
 
 on:
   schedule:
-    # Runs daily at 09:00 UTC. Adjust as you like: https://crontab.guru
-    - cron: "0 9 * * *"
+    # Runs weekly, Monday 09:00 UTC. Adjust as you like: https://crontab.guru
+    - cron: "0 9 * * 1"
   workflow_dispatch:
     inputs:
       test_email:
