@@ -159,6 +159,8 @@ def save_state(state: dict) -> None:
 def write_readable_state(
     master_entries: list[tuple[WantlistItem, list[Version]]],
     standalone_items: list[WantlistItem],
+    discovered_versions: dict,
+    current_release_ids: set[int],
 ) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -190,7 +192,50 @@ def write_readable_state(
         lines.append("(none)")
     lines.append("")
 
+    not_wantlisted = sum(1 for rid in discovered_versions if int(rid) not in current_release_ids)
+    lines.append(
+        f"## All versions ever discovered ({len(discovered_versions)}, "
+        f"{not_wantlisted} not yet on your wantlist)"
+    )
+    lines.append("")
+    if discovered_versions:
+        records = sorted(
+            discovered_versions.items(),
+            key=lambda kv: kv[1].get("discovered_date", ""),
+            reverse=True,
+        )
+        for release_id, rec in records:
+            wantlisted = "Yes" if int(release_id) in current_release_ids else "No"
+            details = " / ".join(
+                p for p in [rec.get("format"), rec.get("country"), rec.get("released")] if p
+            )
+            url = f"https://www.discogs.com/release/{release_id}"
+            lines.append(
+                f"- [{rec.get('discovered_date', '?')}] {rec.get('artists')} - {rec.get('title')} "
+                f"({details}) -> {url} | Wantlisted: {wantlisted}"
+            )
+    else:
+        lines.append("(none found yet)")
+    lines.append("")
+
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
+
+
+def record_discoveries(state: dict, item: WantlistItem, versions: list[Version], today: str) -> None:
+    discovered: dict = state.setdefault("discovered_versions", {})
+    for v in versions:
+        discovered.setdefault(
+            str(v.release_id),
+            {
+                "master_id": item.master_id,
+                "artists": item.artists,
+                "title": v.title or item.title,
+                "format": ", ".join(sorted(v.major_formats)) or v.format,
+                "country": v.country,
+                "released": v.released,
+                "discovered_date": today,
+            },
+        )
 
 
 def send_email(subject: str, body: str) -> None:
@@ -287,9 +332,16 @@ def main() -> None:
             new_findings.append((item, new_versions))
             known_versions[key] = sorted(current_ids | previously_known)
 
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for item, versions in new_findings:
+        record_discoveries(state, item, versions, today)
+
     state["standalone_release_ids"] = sorted({item.release_id for item in standalone_items})
     save_state(state)
-    write_readable_state(all_master_entries, standalone_items)
+    current_release_ids = {item.release_id for item in wantlist}
+    write_readable_state(
+        all_master_entries, standalone_items, state.get("discovered_versions", {}), current_release_ids
+    )
 
     if not new_findings:
         print("No new versions found.")

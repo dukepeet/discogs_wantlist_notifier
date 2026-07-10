@@ -36,12 +36,15 @@ versions, since it's the first time any alternate version has existed for
 that release.
 
 `state_readable.md` is regenerated on every run and lists, in plain text,
-every tracked master with its known versions plus every wantlist item that
-has no master release yet — useful for eyeballing what's currently on
-record. `state.json` remains the machine-readable file the script actually
-diffs against; the readable file is just a mirror for humans and any local
-edits to it are overwritten on the next run. Both files live only in your
-private data repo, never in this (public) code repo.
+every tracked master with its known versions, every wantlist item that has
+no master release yet, and — at the bottom — every version ever discovered
+by the notifier with its discovery date and whether it's currently on your
+wantlist. That last section is a good place to periodically check for
+anything you've found but never gotten around to wantlisting. `state.json`
+remains the machine-readable file the script actually diffs against; the
+readable file is just a mirror for humans and any local edits to it are
+overwritten on the next run. Both files live only in your private data repo,
+never in this (public) code repo.
 
 ## Setup
 
