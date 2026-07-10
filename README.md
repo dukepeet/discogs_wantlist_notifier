@@ -74,8 +74,8 @@ repository secret**. Add each of these:
 | `SMTP_PORT`           | e.g. `587`                                  |
 | `SMTP_USER`           | SMTP login (e.g. your Gmail address)        |
 | `SMTP_PASS`           | SMTP password / app password                |
-| `EMAIL_TO`            | Where to send notifications                 |
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
+| `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
 
 ### 5. Enable and test the workflow
 

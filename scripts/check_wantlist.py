@@ -142,8 +142,8 @@ def send_email(subject: str, body: str) -> None:
     smtp_port = int(env("SMTP_PORT", default="587"))
     smtp_user = env("SMTP_USER")
     smtp_pass = env("SMTP_PASS")
-    email_to = env("EMAIL_TO")
     email_from = env("EMAIL_FROM", required=False, default=smtp_user)
+    email_to = env("EMAIL_TO", required=False, default=email_from)
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
