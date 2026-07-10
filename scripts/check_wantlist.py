@@ -14,6 +14,7 @@ import smtplib
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import requests
 
 DISCOGS_API = "https://api.discogs.com"
 STATE_PATH = Path(__file__).resolve().parent.parent / "state.json"
+STATE_READABLE_PATH = Path(__file__).resolve().parent.parent / "state_readable.md"
 REQUEST_DELAY_SECONDS = 1.1  # keep well under Discogs' 60 req/min authenticated limit
 PER_PAGE = 100
 
@@ -39,6 +41,10 @@ class WantlistItem:
     master_id: int
     title: str
     artists: str
+
+    @property
+    def url(self) -> str:
+        return f"https://www.discogs.com/release/{self.release_id}"
 
 
 @dataclass
@@ -137,6 +143,41 @@ def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def write_readable_state(
+    master_entries: list[tuple[WantlistItem, list[Version]]],
+    standalone_items: list[WantlistItem],
+) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        "# Discogs wantlist notifier - current record",
+        "",
+        f"Generated {now}. Regenerated on every run; edits here are not preserved.",
+        "",
+        f"## Tracked masters ({len(master_entries)})",
+        "",
+    ]
+
+    for item, versions in sorted(master_entries, key=lambda pair: (pair[0].artists, pair[0].title)):
+        lines.append(f"### {item.artists} - {item.title}")
+        lines.append(f"Master: https://www.discogs.com/master/{item.master_id}")
+        lines.append("")
+        for v in sorted(versions, key=lambda v: v.released or ""):
+            details = " / ".join(p for p in [v.format, v.country, v.released] if p)
+            lines.append(f"- {v.title} ({details}) -> {v.url}")
+        lines.append("")
+
+    lines.append(f"## Items with no master release yet ({len(standalone_items)})")
+    lines.append("")
+    if standalone_items:
+        for item in sorted(standalone_items, key=lambda i: (i.artists, i.title)):
+            lines.append(f"- {item.artists} - {item.title} -> {item.url}")
+    else:
+        lines.append("(none)")
+    lines.append("")
+
+    STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
+
+
 def send_email(subject: str, body: str) -> None:
     smtp_host = env("SMTP_HOST")
     smtp_port = int(env("SMTP_PORT", default="587"))
@@ -188,10 +229,12 @@ def main() -> None:
     )
 
     new_findings: list[tuple[WantlistItem, list[Version]]] = []
+    all_master_entries: list[tuple[WantlistItem, list[Version]]] = []
 
     for i, (master_id, item) in enumerate(masters_to_check.items(), start=1):
         print(f"[{i}/{len(masters_to_check)}] Checking master {master_id} ({item.artists} - {item.title})...")
         versions = client.get_master_versions(master_id)
+        all_master_entries.append((item, versions))
         current_ids = {v.release_id for v in versions}
 
         key = str(master_id)
@@ -216,6 +259,7 @@ def main() -> None:
 
     state["standalone_release_ids"] = sorted({item.release_id for item in standalone_items})
     save_state(state)
+    write_readable_state(all_master_entries, standalone_items)
 
     if not new_findings:
         print("No new versions found.")

@@ -27,6 +27,13 @@ grouped with it — that's reported as a new finding with the full list of
 versions, since it's the first time any alternate version has existed for
 that release.
 
+[`state_readable.md`](state_readable.md) is regenerated on every run and
+lists, in plain text, every tracked master with its known versions plus
+every wantlist item that has no master release yet — useful for eyeballing
+what's currently on record. `state.json` remains the machine-readable file
+the script actually diffs against; the readable file is just a mirror for
+humans and any local edits to it are overwritten on the next run.
+
 ## Setup
 
 ### 1. Get a Discogs personal access token
