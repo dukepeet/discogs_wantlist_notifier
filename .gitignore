@@ -3,3 +3,6 @@ __pycache__/
 .venv/
 venv/
 .env
+data/
+state.json
+state_readable.md

@@ -21,8 +21,9 @@ from pathlib import Path
 import requests
 
 DISCOGS_API = "https://api.discogs.com"
-STATE_PATH = Path(__file__).resolve().parent.parent / "state.json"
-STATE_READABLE_PATH = Path(__file__).resolve().parent.parent / "state_readable.md"
+STATE_DIR = Path(os.environ.get("STATE_DIR", Path(__file__).resolve().parent.parent))
+STATE_PATH = STATE_DIR / "state.json"
+STATE_READABLE_PATH = STATE_DIR / "state_readable.md"
 REQUEST_DELAY_SECONDS = 1.1  # keep well under Discogs' 60 req/min authenticated limit
 PER_PAGE = 100
 

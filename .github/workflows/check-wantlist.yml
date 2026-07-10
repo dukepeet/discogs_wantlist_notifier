@@ -11,15 +11,19 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
-
 jobs:
   check-wantlist:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
+
+      - name: Checkout state data repo
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ secrets.STATE_REPO }}
+          token: ${{ secrets.STATE_REPO_TOKEN }}
+          path: data
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -32,6 +36,7 @@ jobs:
       - name: Run wantlist check
         env:
           TEST_EMAIL: ${{ (github.event.inputs.test_email == 'true') && '1' || '0' }}
+          STATE_DIR: data
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
@@ -42,7 +47,8 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
         run: python scripts/check_wantlist.py
 
-      - name: Commit updated state
+      - name: Commit updated state to data repo
+        working-directory: data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

@@ -6,18 +6,21 @@ want shows up on Discogs — useful for out-of-print records where you're
 waiting for a reissue.
 
 Runs automatically via a scheduled GitHub Actions workflow, no server needed.
+This repo (code) is meant to be public; your actual wantlist data lives in a
+separate **private** repo — see [Keeping your data private](#keeping-your-data-private).
 
 ## How it works
 
-1. Once a day (configurable), a GitHub Actions job fetches your wantlist from
-   the Discogs API.
+1. Once a week (configurable), a GitHub Actions job fetches your wantlist
+   from the Discogs API.
 2. For each wanted item that belongs to a "master release" (i.e. it has other
    pressings), it fetches all currently known versions of that master.
 3. It compares that list against `state.json`, which records what was seen
    last time. Anything new triggers an email.
 4. The first run just records a baseline for each master (no email) so you
    don't get spammed with pressings that already existed.
-5. `state.json` is committed back to the repo by the workflow after each run.
+5. `state.json` is committed back to your private data repo by the workflow
+   after each run.
 
 Wantlist items with **no master release yet** (a standalone pressing Discogs
 hasn't grouped with any other version) are tracked too: each run remembers
@@ -27,12 +30,13 @@ grouped with it — that's reported as a new finding with the full list of
 versions, since it's the first time any alternate version has existed for
 that release.
 
-[`state_readable.md`](state_readable.md) is regenerated on every run and
-lists, in plain text, every tracked master with its known versions plus
-every wantlist item that has no master release yet — useful for eyeballing
-what's currently on record. `state.json` remains the machine-readable file
-the script actually diffs against; the readable file is just a mirror for
-humans and any local edits to it are overwritten on the next run.
+`state_readable.md` is regenerated on every run and lists, in plain text,
+every tracked master with its known versions plus every wantlist item that
+has no master release yet — useful for eyeballing what's currently on
+record. `state.json` remains the machine-readable file the script actually
+diffs against; the readable file is just a mirror for humans and any local
+edits to it are overwritten on the next run. Both files live only in your
+private data repo, never in this (public) code repo.
 
 ## Setup
 
@@ -68,15 +72,34 @@ git remote add origin <your-repo-url>
 git push -u origin main
 ```
 
-### 4. Add repository secrets
+### 4. Set up your private data repo
 
-In your GitHub repo: **Settings → Secrets and variables → Actions → New
-repository secret**. Add each of these:
+This code repo is meant to be public (or at least shareable) — it contains no
+personal information. Your actual wantlist contents (`state.json` /
+`state_readable.md`) are written to a **separate private repo** instead, so
+making this repo public never exposes what's on your wantlist.
+
+1. Create a new **private** GitHub repo, e.g. `discogs-wantlist-notifier-data`.
+   Initialize it with a README (or any first commit) so it has a default
+   branch — an empty repo with zero commits can't be checked out.
+2. Create a fine-grained personal access token scoped to just that repo:
+   [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+   - **Repository access**: "Only select repositories" → pick your new data
+     repo.
+   - **Permissions**: Repository → **Contents** → **Read and write**.
+   - Copy the generated token.
+
+### 5. Add repository secrets
+
+In this repo: **Settings → Secrets and variables → Actions → New repository
+secret**. Add each of these:
 
 | Secret name         | Value                                      |
 |----------------------|---------------------------------------------|
 | `DISCOGS_TOKEN`      | Your Discogs personal access token          |
 | `DISCOGS_USERNAME`   | Your Discogs username                       |
+| `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) |
+| `STATE_REPO_TOKEN`    | The fine-grained PAT from step 4            |
 | `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
 | `SMTP_PORT`           | e.g. `587`                                  |
 | `SMTP_USER`           | SMTP login (e.g. your Gmail address)        |
@@ -84,17 +107,26 @@ repository secret**. Add each of these:
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
 
-### 5. Enable and test the workflow
+### 6. Enable and test the workflow
 
-- Go to the **Actions** tab in your repo, select "Check Discogs wantlist for
+- Go to the **Actions** tab in this repo, select "Check Discogs wantlist for
   new versions", and click **Run workflow** to trigger it manually the first
   time.
-- Check the run logs to confirm it fetched your wantlist and committed a
-  populated `state.json`.
-- After that, it runs automatically once a day (default: 09:00 UTC — edit the
-  `cron` line in
+- Check the run logs to confirm it fetched your wantlist. Then check your
+  private data repo — it should now have a populated `state.json` and
+  `state_readable.md` committed to it.
+- After that, it runs automatically once a week (default: Monday 09:00 UTC —
+  edit the `cron` line in
   [`.github/workflows/check-wantlist.yml`](.github/workflows/check-wantlist.yml)
   to change the schedule).
+
+## Keeping your data private
+
+Once the steps above are done, this repo's git history and files contain no
+personal information — everything wantlist-related lives in your private
+data repo instead. At that point it's safe to make this repo public via
+**Settings → Danger Zone → Change visibility** (your data repo should stay
+private).
 
 ## Running locally
 
@@ -111,6 +143,11 @@ export EMAIL_TO=...
 
 python scripts/check_wantlist.py
 ```
+
+`state.json` and `state_readable.md` are written to the current directory by
+default. Set `STATE_DIR=/some/other/path` to write them elsewhere (this is
+how the GitHub Actions workflow points them at the checked-out private data
+repo).
 
 ## Notes on rate limits
 
