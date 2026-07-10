@@ -19,8 +19,13 @@ Runs automatically via a scheduled GitHub Actions workflow, no server needed.
    don't get spammed with pressings that already existed.
 5. `state.json` is committed back to the repo by the workflow after each run.
 
-Items with no master release (standalone, non-reissued releases) are skipped
-since there's nothing else to track.
+Wantlist items with **no master release yet** (a standalone pressing Discogs
+hasn't grouped with any other version) are tracked too: each run remembers
+which items are currently masterless. If Discogs later creates a master
+release for one of them — meaning a reissue/repress finally got added and
+grouped with it — that's reported as a new finding with the full list of
+versions, since it's the first time any alternate version has existed for
+that release.
 
 ## Setup
 

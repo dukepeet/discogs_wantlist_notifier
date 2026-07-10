@@ -174,15 +174,18 @@ def main() -> None:
     client = DiscogsClient(token, user_agent)
     state = load_state()
     known_versions: dict = state.setdefault("known_versions", {})
+    previously_standalone = set(state.setdefault("standalone_release_ids", []))
 
     print(f"Fetching wantlist for {username}...")
     wantlist = client.get_wantlist(username)
     print(f"Found {len(wantlist)} wantlist items.")
 
     masters_to_check = {item.master_id: item for item in wantlist if item.master_id}
-    skipped = len(wantlist) - len(masters_to_check)
-    if skipped:
-        print(f"Skipping {skipped} item(s) with no master release (no versions to track).")
+    standalone_items = [item for item in wantlist if not item.master_id]
+    print(
+        f"{len(masters_to_check)} item(s) belong to a master release, "
+        f"{len(standalone_items)} item(s) currently have no master release."
+    )
 
     new_findings: list[tuple[WantlistItem, list[Version]]] = []
 
@@ -194,8 +197,14 @@ def main() -> None:
         key = str(master_id)
         previously_known = set(known_versions.get(key, []))
 
+        # If this release had no master release last run, Discogs has just grouped
+        # it with other version(s) for the first time -- that's news, so notify
+        # with the full version list instead of silently baselining it.
+        newly_gained_master = item.release_id in previously_standalone
+
         if key not in known_versions:
-            # First time we've seen this master: establish baseline, no notification.
+            if newly_gained_master:
+                new_findings.append((item, versions))
             known_versions[key] = sorted(current_ids)
             continue
 
@@ -205,6 +214,7 @@ def main() -> None:
             new_findings.append((item, new_versions))
             known_versions[key] = sorted(current_ids | previously_known)
 
+    state["standalone_release_ids"] = sorted({item.release_id for item in standalone_items})
     save_state(state)
 
     if not new_findings:
