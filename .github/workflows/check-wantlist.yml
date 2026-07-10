@@ -4,7 +4,12 @@ on:
   schedule:
     # Runs daily at 09:00 UTC. Adjust as you like: https://crontab.guru
     - cron: "0 9 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: "Send a test email instead of checking the wantlist (to verify SMTP setup)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -26,6 +31,7 @@ jobs:
 
       - name: Run wantlist check
         env:
+          TEST_EMAIL: ${{ (github.event.inputs.test_email == 'true') && '1' || '0' }}
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

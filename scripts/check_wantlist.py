@@ -158,6 +158,13 @@ def send_email(subject: str, body: str) -> None:
 
 
 def main() -> None:
+    if os.environ.get("TEST_EMAIL") == "1":
+        send_email(
+            subject="Discogs wantlist notifier: test email",
+            body="This is a test email to confirm SMTP delivery is working.",
+        )
+        return
+
     token = env("DISCOGS_TOKEN")
     username = env("DISCOGS_USERNAME")
     user_agent = env(
