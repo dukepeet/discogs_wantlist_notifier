@@ -157,6 +157,7 @@ def save_state(state: dict) -> None:
 
 
 def write_readable_state(
+    username: str,
     master_entries: list[tuple[WantlistItem, list[Version]]],
     standalone_items: list[WantlistItem],
     discovered_versions: dict,
@@ -165,6 +166,8 @@ def write_readable_state(
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
         "# Discogs wantlist notifier - current record",
+        "",
+        f"Wantlist: https://www.discogs.com/wantlist?user={username}",
         "",
         f"Generated {now}. Regenerated on every run; edits here are not preserved.",
         "",
@@ -340,7 +343,11 @@ def main() -> None:
     save_state(state)
     current_release_ids = {item.release_id for item in wantlist}
     write_readable_state(
-        all_master_entries, standalone_items, state.get("discovered_versions", {}), current_release_ids
+        username,
+        all_master_entries,
+        standalone_items,
+        state.get("discovered_versions", {}),
+        current_release_ids,
     )
 
     if not new_findings:
