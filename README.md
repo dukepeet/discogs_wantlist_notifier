@@ -14,7 +14,12 @@ separate **private** repo — see [Keeping your data private](#keeping-your-data
 1. Once a week (configurable), a GitHub Actions job fetches your wantlist
    from the Discogs API.
 2. For each wanted item that belongs to a "master release" (i.e. it has other
-   pressings), it fetches all currently known versions of that master.
+   pressings), it fetches all currently known versions of that master and
+   keeps only the ones matching a format you actually have wantlisted for
+   that title (e.g. if you only wantlisted the Vinyl pressing, new CD or
+   digital versions of the same master are ignored entirely). If you've
+   wantlisted the same title in more than one format, all of those formats
+   are tracked.
 3. It compares that list against `state.json`, which records what was seen
    last time. Anything new triggers an email.
 4. The first run just records a baseline for each master (no email) so you

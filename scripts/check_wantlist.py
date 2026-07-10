@@ -42,6 +42,7 @@ class WantlistItem:
     master_id: int
     title: str
     artists: str
+    formats: frozenset[str]
 
     @property
     def url(self) -> str:
@@ -53,12 +54,18 @@ class Version:
     release_id: int
     title: str
     format: str
+    major_formats: frozenset[str]
     country: str
     released: str
 
     @property
     def url(self) -> str:
         return f"https://www.discogs.com/release/{self.release_id}"
+
+    def matches_formats(self, wanted_formats: frozenset[str]) -> bool:
+        if not wanted_formats:
+            return True
+        return bool({f.lower() for f in self.major_formats} & wanted_formats)
 
 
 class DiscogsClient:
@@ -95,12 +102,16 @@ class DiscogsClient:
             for want in data.get("wants", []):
                 info = want.get("basic_information", {})
                 artists = ", ".join(a.get("name", "") for a in info.get("artists", []))
+                formats = frozenset(
+                    f.get("name", "") for f in info.get("formats", []) if f.get("name")
+                )
                 items.append(
                     WantlistItem(
                         release_id=info.get("id"),
                         master_id=info.get("master_id") or 0,
                         title=info.get("title", "Unknown title"),
                         artists=artists,
+                        formats=formats,
                     )
                 )
             pagination = data.get("pagination", {})
@@ -123,6 +134,7 @@ class DiscogsClient:
                         release_id=v.get("id"),
                         title=v.get("title", ""),
                         format=v.get("format", ""),
+                        major_formats=frozenset(v.get("major_formats", [])),
                         country=v.get("country", ""),
                         released=v.get("released", ""),
                     )
@@ -163,7 +175,9 @@ def write_readable_state(
         lines.append(f"Master: https://www.discogs.com/master/{item.master_id}")
         lines.append("")
         for v in sorted(versions, key=lambda v: v.released or ""):
-            details = " / ".join(p for p in [v.format, v.country, v.released] if p)
+            details = " / ".join(
+                p for p in [", ".join(sorted(v.major_formats)), v.format, v.country, v.released] if p
+            )
             lines.append(f"- {v.title} ({details}) -> {v.url}")
         lines.append("")
 
@@ -222,7 +236,15 @@ def main() -> None:
     wantlist = client.get_wantlist(username)
     print(f"Found {len(wantlist)} wantlist items.")
 
-    masters_to_check = {item.master_id: item for item in wantlist if item.master_id}
+    masters_to_check: dict[int, WantlistItem] = {}
+    masters_wanted_formats: dict[int, set[str]] = {}
+    for item in wantlist:
+        if not item.master_id:
+            continue
+        masters_to_check.setdefault(item.master_id, item)
+        masters_wanted_formats.setdefault(item.master_id, set()).update(
+            f.lower() for f in item.formats
+        )
     standalone_items = [item for item in wantlist if not item.master_id]
     print(
         f"{len(masters_to_check)} item(s) belong to a master release, "
@@ -234,7 +256,14 @@ def main() -> None:
 
     for i, (master_id, item) in enumerate(masters_to_check.items(), start=1):
         print(f"[{i}/{len(masters_to_check)}] Checking master {master_id} ({item.artists} - {item.title})...")
-        versions = client.get_master_versions(master_id)
+        wanted_formats = frozenset(masters_wanted_formats.get(master_id, set()))
+        all_versions = client.get_master_versions(master_id)
+        versions = [v for v in all_versions if v.matches_formats(wanted_formats)]
+        if wanted_formats and len(versions) < len(all_versions):
+            print(
+                f"    Filtering to wantlisted format(s) {sorted(wanted_formats)}; "
+                f"ignoring {len(all_versions) - len(versions)} version(s) in other format(s)."
+            )
         all_master_entries.append((item, versions))
         current_ids = {v.release_id for v in versions}
 
@@ -270,7 +299,9 @@ def main() -> None:
     for item, versions in new_findings:
         lines.append(f"{item.artists} - {item.title}")
         for v in versions:
-            details = " / ".join(p for p in [v.format, v.country, v.released] if p)
+            details = " / ".join(
+                p for p in [", ".join(sorted(v.major_formats)), v.format, v.country, v.released] if p
+            )
             lines.append(f"  - {v.title} ({details}) -> {v.url}")
         lines.append("")
 
