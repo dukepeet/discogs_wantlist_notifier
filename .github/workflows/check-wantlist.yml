@@ -11,6 +11,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: check-wantlist
+  cancel-in-progress: false
+
 jobs:
   check-wantlist:
     runs-on: ubuntu-latest
