@@ -21,7 +21,7 @@ jobs:
       - name: Checkout state data repo
         uses: actions/checkout@v7
         with:
-          repository: ${{ secrets.STATE_REPO }}
+          repository: ${{ vars.STATE_REPO }}
           token: ${{ secrets.STATE_REPO_TOKEN }}
           path: data
 
@@ -36,12 +36,13 @@ jobs:
       - name: Run wantlist check
         env:
           TEST_EMAIL: ${{ (github.event.inputs.test_email == 'true') && '1' || '0' }}
-          MARKETPLACE_PRICE_LIMIT_EUR: ${{ secrets.MARKETPLACE_PRICE_LIMIT_EUR }}
+          MARKETPLACE_PRICE_LIMIT_EUR: ${{ vars.MARKETPLACE_PRICE_LIMIT_EUR }}
+          NON_EU_VAT_PCT: ${{ vars.NON_EU_VAT_PCT }}
           STATE_DIR: data
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}

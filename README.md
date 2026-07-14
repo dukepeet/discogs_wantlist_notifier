@@ -131,23 +131,32 @@ making this repo public never exposes what's on your wantlist.
    - **Permissions**: Repository → **Contents** → **Read and write**.
    - Copy the generated token.
 
-### 5. Add repository secrets
+### 5. Add repository secrets and variables
 
-In this repo: **Settings → Secrets and variables → Actions → New repository
-secret**. Add each of these:
+Discogs/SMTP credentials and personal info go in **Secrets** (masked, write-only
+after saving); non-sensitive configuration goes in **Variables** (visible in
+the Settings UI, since there's nothing to hide). Both are under **Settings →
+Secrets and variables → Actions**, on separate tabs.
+
+**Secrets** (→ New repository secret):
 
 | Secret name         | Value                                      |
 |----------------------|---------------------------------------------|
 | `DISCOGS_TOKEN`      | Your Discogs personal access token          |
 | `DISCOGS_USERNAME`   | Your Discogs username                       |
-| `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) |
 | `STATE_REPO_TOKEN`    | The fine-grained PAT from step 4            |
-| `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
-| `SMTP_PORT`           | e.g. `587`                                  |
 | `SMTP_USER`           | SMTP login (e.g. your Gmail address)        |
 | `SMTP_PASS`           | SMTP password / app password                |
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
+
+**Variables** (→ Variables tab → New repository variable):
+
+| Variable name        | Value                                      |
+|----------------------|---------------------------------------------|
+| `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) |
+| `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
+| `SMTP_PORT`           | e.g. `587`                                  |
 | `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `80` |
 | `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to price for non-EU sellers, defaults to `27` |
 
