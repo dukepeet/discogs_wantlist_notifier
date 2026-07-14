@@ -135,10 +135,12 @@ making this repo public never exposes what's on your wantlist.
 
 ### 5. Add repository secrets and variables
 
-Discogs/SMTP credentials and personal info go in **Secrets** (masked, write-only
-after saving); non-sensitive configuration goes in **Variables** (visible in
-the Settings UI, since there's nothing to hide). Both are under **Settings →
-Secrets and variables → Actions**, on separate tabs.
+Credentials, personal info, and anything identifying which private data repo
+holds your wantlist go in **Secrets** (masked, write-only after saving, and
+redacted from workflow logs — important since this repo's Actions logs are
+public once the repo itself is public). Non-sensitive configuration that's
+fine to appear in plaintext in those logs goes in **Variables** instead. Both
+are under **Settings → Secrets and variables → Actions**, on separate tabs.
 
 **Secrets** (→ New repository secret):
 
@@ -146,6 +148,7 @@ Secrets and variables → Actions**, on separate tabs.
 |----------------------|---------------------------------------------|
 | `DISCOGS_TOKEN`      | Your Discogs personal access token          |
 | `DISCOGS_USERNAME`   | Your Discogs username                       |
+| `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) — kept as a secret (not a Variable) so its name never appears in this repo's public Actions logs |
 | `STATE_REPO_TOKEN`    | The fine-grained PAT from step 4            |
 | `SMTP_USER`           | SMTP login (e.g. your Gmail address)        |
 | `SMTP_PASS`           | SMTP password / app password                |
@@ -156,7 +159,6 @@ Secrets and variables → Actions**, on separate tabs.
 
 | Variable name        | Value                                      |
 |----------------------|---------------------------------------------|
-| `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) |
 | `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
 | `SMTP_PORT`           | e.g. `587`                                  |
 | `MARKETPLACE_PRICE_LIMIT_EUR` | **Required.** Price limit in EUR for the marketplace check (e.g. `80`) — no default, must be set deliberately |

@@ -21,7 +21,7 @@ jobs:
       - name: Checkout state data repo
         uses: actions/checkout@v7
         with:
-          repository: ${{ vars.STATE_REPO }}
+          repository: ${{ secrets.STATE_REPO }}
           token: ${{ secrets.STATE_REPO_TOKEN }}
           path: data
 
