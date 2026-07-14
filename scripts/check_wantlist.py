@@ -172,7 +172,6 @@ def write_readable_state(
     current_release_ids: set[int],
     marketplace_flagged: dict[int, dict],
     price_limit: float,
-    shipping_config: dict,
 ) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -235,15 +234,17 @@ def write_readable_state(
     lines.append(
         f"## Marketplace listings currently under EUR {price_limit:.2f} ({len(marketplace_flagged)})"
     )
-    lines.append(format_shipping_estimate_caveat(shipping_config))
+    lines.append(
+        "Prices are the listed price only, excluding shipping -- check the actual "
+        "listing before buying."
+    )
     lines.append("")
     if marketplace_flagged:
         for release_id, info in sorted(marketplace_flagged.items(), key=lambda kv: kv[1]["price"]):
             item = info["item"]
             url = f"https://www.discogs.com/sell/release/{release_id}"
-            est = format_estimate_range(info)
             lines.append(
-                f"- {item.artists} - {item.title}: EUR {info['price']:.2f}{est} "
+                f"- {item.artists} - {item.title}: EUR {info['price']:.2f} "
                 f"({info['num_for_sale']} for sale) -> {url}"
             )
     else:
@@ -251,31 +252,6 @@ def write_readable_state(
     lines.append("")
 
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
-
-
-def compute_non_eu_vat_estimate(price: float, shipping_config: dict) -> float:
-    """Import VAT is the one origin-dependent cost worth flagging automatically
-    (EU sellers charge none; non-EU sellers trigger it on the full customs
-    value). Shipping cost itself isn't estimated -- Discogs exposes neither
-    per-listing shipping/seller data nor a buyer's purchase history to derive
-    it from, so the price limit itself is the shipping buffer instead."""
-    return price * (1 + shipping_config["non_eu_vat_pct"] / 100)
-
-
-def format_estimate_range(info: dict) -> str:
-    total = info.get("estimated_total_non_eu_vat")
-    return f" (if non-EU seller, incl. VAT: ~EUR {total:.2f})" if total is not None else ""
-
-
-def format_shipping_estimate_caveat(shipping_config: dict) -> str:
-    return (
-        f"If the seller is outside the EU, import VAT (default "
-        f"{shipping_config['non_eu_vat_pct']:.0f}%, Hungary's rate) applies on top of the "
-        "listed price -- shown as 'incl. VAT' above. Shipping cost itself isn't estimated "
-        "(Discogs's API exposes neither per-listing shipping/seller data nor a buyer's "
-        "purchase history to derive it from); the price limit is set with that headroom "
-        "in mind instead. You still need to check the actual listing's seller location."
-    )
 
 
 def record_discoveries(state: dict, item: WantlistItem, versions: list[Version], today: str) -> None:
@@ -393,10 +369,6 @@ def main() -> None:
     for item, versions in new_findings:
         record_discoveries(state, item, versions, today)
 
-    shipping_config = {
-        "non_eu_vat_pct": float(env("NON_EU_VAT_PCT", required=False, default="27")),
-    }
-
     price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR"))
     previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
     currently_flagged: dict[int, dict] = {}
@@ -418,7 +390,6 @@ def main() -> None:
                 "item": item,
                 "price": price,
                 "num_for_sale": num_for_sale,
-                "estimated_total_non_eu_vat": compute_non_eu_vat_estimate(price, shipping_config),
             }
 
     new_marketplace_alerts = {
@@ -441,7 +412,6 @@ def main() -> None:
         current_release_ids,
         currently_flagged,
         price_limit,
-        shipping_config,
     )
 
     lines: list[str] = []
@@ -465,13 +435,10 @@ def main() -> None:
         ):
             item = info["item"]
             url = f"https://www.discogs.com/sell/release/{release_id}"
-            est = format_estimate_range(info)
             lines.append(
-                f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f}{est} "
+                f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f} "
                 f"({info['num_for_sale']} for sale) -> {url}"
             )
-        lines.append("")
-        lines.append(format_shipping_estimate_caveat(shipping_config))
         lines.append("")
 
     if not lines:

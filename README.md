@@ -56,27 +56,19 @@ no built-in default for this one — it's a personal budget decision, not
 something worth silently guessing at — so the workflow fails with a clear
 error if it isn't set (see step 5 below).
 
-Three things worth knowing about this check:
+Two things worth knowing about this check:
 
-- **The price excludes shipping**, and that's deliberate rather than
-  estimated. Discogs's public API doesn't expose per-listing shipping cost or
-  seller location for buyers (only the aggregate lowest price) — and,
-  somewhat surprisingly, there's also no API endpoint for a buyer's own
-  purchase history (`marketplace/orders` only works "authenticated as the
-  seller"; a long-standing, acknowledged gap in Discogs's API), so there's no
-  way to derive a real shipping figure from any actual data. The marketplace
-  listing pages themselves are also behind a Cloudflare bot challenge, so
-  scraping them isn't something this project does either. The €80 default
-  is set with that missing shipping headroom already in mind, rather than
-  trying to add a guessed number on top.
-- **The one thing that *is* estimated is import VAT**, since it's the one
-  origin-dependent cost that can be large and predictable: EU sellers charge
-  none, non-EU sellers trigger import VAT (default **27%**, Hungary's rate —
-  set `NON_EU_VAT_PCT` to change it) on the full price. A flagged listing
-  shows "if non-EU seller, incl. VAT: ~€X" alongside the raw price. There's no
-  way to know which case actually applies to a *new* listing automatically
-  (the marketplace/stats endpoint gives no seller info), so you still need to
-  open the listing to check the seller's real location.
+- **The price excludes shipping**, and it's not estimated. Discogs's public
+  API doesn't expose per-listing shipping cost or seller location for buyers
+  (only the aggregate lowest price) — and, somewhat surprisingly, there's
+  also no API endpoint for a buyer's own purchase history
+  (`marketplace/orders` only works "authenticated as the seller"; a
+  long-standing, acknowledged gap in Discogs's API), so there's no way to
+  derive a real shipping figure from any actual data. The marketplace listing
+  pages themselves are also behind a Cloudflare bot challenge, so scraping
+  them isn't something this project does either. Set your price limit with
+  that missing shipping headroom already in mind, rather than expecting the
+  notifier to add anything on top.
 - **You're only emailed when a release newly drops under the limit**, not
   every week for a listing you've already seen and decided not to buy. The
   full current snapshot (not just new ones) is always in `state_readable.md`
@@ -162,7 +154,6 @@ are under **Settings → Secrets and variables → Actions**, on separate tabs.
 | `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
 | `SMTP_PORT`           | e.g. `587`                                  |
 | `MARKETPLACE_PRICE_LIMIT_EUR` | **Required.** Price limit in EUR for the marketplace check (e.g. `80`) — no default, must be set deliberately |
-| `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to price for non-EU sellers, defaults to `27` |
 
 ### 6. Enable and test the workflow
 

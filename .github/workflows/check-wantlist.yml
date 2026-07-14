@@ -41,7 +41,6 @@ jobs:
         env:
           TEST_EMAIL: ${{ (github.event.inputs.test_email == 'true') && '1' || '0' }}
           MARKETPLACE_PRICE_LIMIT_EUR: ${{ vars.MARKETPLACE_PRICE_LIMIT_EUR }}
-          NON_EU_VAT_PCT: ${{ vars.NON_EU_VAT_PCT }}
           STATE_DIR: data
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
