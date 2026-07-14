@@ -458,7 +458,7 @@ def main() -> None:
             lines.append("")
 
     if new_marketplace_alerts:
-        lines.append(f"New marketplace listings under EUR {price_limit:.2f} (excl. shipping/fees):")
+        lines.append(f"New marketplace listings under EUR {price_limit:.2f} (listed price, excl. shipping):")
         lines.append("")
         for release_id, info in sorted(
             new_marketplace_alerts.items(), key=lambda kv: (kv[1]["item"].artists, kv[1]["item"].title)

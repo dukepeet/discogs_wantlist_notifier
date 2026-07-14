@@ -56,7 +56,7 @@ to change it), it's flagged.
 
 Three things worth knowing about this check:
 
-- **The price excludes shipping and fees**, and that's deliberate rather than
+- **The price excludes shipping**, and that's deliberate rather than
   estimated. Discogs's public API doesn't expose per-listing shipping cost or
   seller location for buyers (only the aggregate lowest price) — and,
   somewhat surprisingly, there's also no API endpoint for a buyer's own
