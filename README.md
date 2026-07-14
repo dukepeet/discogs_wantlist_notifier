@@ -63,14 +63,21 @@ Three things worth knowing about this check:
   the EU where VAT/import charges could apply. The marketplace listing pages
   themselves are also behind a Cloudflare bot challenge, so scraping them for
   real shipping figures isn't something this project does.
-- **"Est. total" is a personal estimate, not a quote.** Each run also pulls
-  your own past Discogs orders (`marketplace/orders`, authenticated as you)
-  and computes the median (shipping ÷ item price) ratio across them, then
-  applies that percentage on top of the listed price as a rough "what
-  shipping+fees usually costs me" adjustment. It's shown next to the raw
-  price in the email and `state_readable.md`, along with how many of your
-  past orders it's based on. If you don't have enough Discogs purchase
-  history, this is simply omitted and only the raw price is shown.
+- **"Est. total" is a personal, region-split estimate, not a quote.** Each run
+  pulls your own past Discogs orders (`marketplace/orders`, authenticated as
+  you) and, for each one, looks up the seller's profile location (cached in
+  `state.json` so each seller is only looked up once, ever). Orders are split
+  into "EU seller" and "non-EU seller" buckets (location matched against a
+  country-name list; UK counts as non-EU post-Brexit), and the median
+  (shipping ÷ item price) ratio is computed separately for each bucket. A
+  flagged listing then shows **both** an EU-seller and a non-EU-seller
+  estimated total side by side, since the marketplace/stats endpoint used to
+  find cheap listings gives no seller info — there's no way to know which
+  bucket actually applies to a *new* listing automatically, so you still need
+  to open the listing to see the seller's real location and pick the right
+  side of the range. Sample sizes for each bucket are always shown. If a
+  bucket has no data (or you don't have enough Discogs purchase history at
+  all), it's simply omitted rather than guessed at.
 - **You're only emailed when a release newly drops under the limit**, not
   every week for a listing you've already seen and decided not to buy. The
   full current snapshot (not just new ones) is always in `state_readable.md`
