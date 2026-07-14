@@ -69,7 +69,7 @@ Three things worth knowing about this check:
   shipping data is available from any source, a flagged listing shows two
   flat, hand-configured estimates side by side: `SHIPPING_ESTIMATE_EU_EUR`
   (default **€20**) added directly to the price for an EU seller, and
-  `SHIPPING_ESTIMATE_NON_EU_EUR` (default **€22**, plus `NON_EU_VAT_PCT`
+  `SHIPPING_ESTIMATE_NON_EU_EUR` (default **€25**, plus `NON_EU_VAT_PCT`
   import VAT — default **27%**, Hungary's rate — applied to price + shipping)
   for a non-EU seller. There's no way to know which one actually applies to
   a *new* listing automatically (the marketplace/stats endpoint used to find
@@ -151,7 +151,7 @@ secret**. Add each of these:
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
 | `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `100` |
 | `SHIPPING_ESTIMATE_EU_EUR` | *(optional)* flat EU-seller shipping estimate, defaults to `20` |
-| `SHIPPING_ESTIMATE_NON_EU_EUR` | *(optional)* flat non-EU-seller shipping estimate, defaults to `22` |
+| `SHIPPING_ESTIMATE_NON_EU_EUR` | *(optional)* flat non-EU-seller shipping estimate, defaults to `25` |
 | `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to non-EU price + shipping, defaults to `27` |
 
 ### 6. Enable and test the workflow

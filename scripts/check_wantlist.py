@@ -406,7 +406,7 @@ def main() -> None:
 
     shipping_config = {
         "eu_shipping_eur": float(env("SHIPPING_ESTIMATE_EU_EUR", required=False, default="20")),
-        "non_eu_shipping_eur": float(env("SHIPPING_ESTIMATE_NON_EU_EUR", required=False, default="22")),
+        "non_eu_shipping_eur": float(env("SHIPPING_ESTIMATE_NON_EU_EUR", required=False, default="25")),
         "non_eu_vat_pct": float(env("NON_EU_VAT_PCT", required=False, default="27")),
     }
 
