@@ -51,31 +51,30 @@ Every run also checks each wantlist item's marketplace availability via
 Discogs's `marketplace/stats` endpoint, which reports the lowest currently
 listed price for that specific release — already converted to EUR by
 Discogs itself, regardless of what currency the seller listed it in. If it's
-at or under a price limit (default **€100**, set `MARKETPLACE_PRICE_LIMIT_EUR`
+at or under a price limit (default **€80**, set `MARKETPLACE_PRICE_LIMIT_EUR`
 to change it), it's flagged.
 
 Three things worth knowing about this check:
 
-- **The price excludes shipping and fees.** Discogs's public API doesn't
-  expose per-listing shipping cost or seller location for buyers (only the
-  aggregate lowest price) — and, somewhat surprisingly, there's also no API
-  endpoint for a buyer's own purchase history (`marketplace/orders` only
-  works "authenticated as the seller"; this is a long-standing, acknowledged
-  gap in Discogs's API), so there's no way to derive a real shipping estimate
-  from any actual data. The marketplace listing pages themselves are also
-  behind a Cloudflare bot challenge, so scraping them isn't something this
-  project does either.
-- **"Est. total" is a manually configured guess, not a quote.** Since no real
-  shipping data is available from any source, a flagged listing shows two
-  flat, hand-configured estimates side by side: `SHIPPING_ESTIMATE_EU_EUR`
-  (default **€20**) added directly to the price for an EU seller, and
-  `SHIPPING_ESTIMATE_NON_EU_EUR` (default **€25**, plus `NON_EU_VAT_PCT`
-  import VAT — default **27%**, Hungary's rate — applied to price + shipping)
-  for a non-EU seller. There's no way to know which one actually applies to
-  a *new* listing automatically (the marketplace/stats endpoint used to find
-  cheap listings gives no seller info), so you still need to open the
-  listing to see the seller's real location and pick the right side of the
-  range. Adjust the three env vars/secrets to match your own experience.
+- **The price excludes shipping and fees**, and that's deliberate rather than
+  estimated. Discogs's public API doesn't expose per-listing shipping cost or
+  seller location for buyers (only the aggregate lowest price) — and,
+  somewhat surprisingly, there's also no API endpoint for a buyer's own
+  purchase history (`marketplace/orders` only works "authenticated as the
+  seller"; a long-standing, acknowledged gap in Discogs's API), so there's no
+  way to derive a real shipping figure from any actual data. The marketplace
+  listing pages themselves are also behind a Cloudflare bot challenge, so
+  scraping them isn't something this project does either. The €80 default
+  is set with that missing shipping headroom already in mind, rather than
+  trying to add a guessed number on top.
+- **The one thing that *is* estimated is import VAT**, since it's the one
+  origin-dependent cost that can be large and predictable: EU sellers charge
+  none, non-EU sellers trigger import VAT (default **27%**, Hungary's rate —
+  set `NON_EU_VAT_PCT` to change it) on the full price. A flagged listing
+  shows "if non-EU seller, incl. VAT: ~€X" alongside the raw price. There's no
+  way to know which case actually applies to a *new* listing automatically
+  (the marketplace/stats endpoint gives no seller info), so you still need to
+  open the listing to check the seller's real location.
 - **You're only emailed when a release newly drops under the limit**, not
   every week for a listing you've already seen and decided not to buy. The
   full current snapshot (not just new ones) is always in `state_readable.md`
@@ -149,10 +148,8 @@ secret**. Add each of these:
 | `SMTP_PASS`           | SMTP password / app password                |
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
-| `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `100` |
-| `SHIPPING_ESTIMATE_EU_EUR` | *(optional)* flat EU-seller shipping estimate, defaults to `20` |
-| `SHIPPING_ESTIMATE_NON_EU_EUR` | *(optional)* flat non-EU-seller shipping estimate, defaults to `25` |
-| `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to non-EU price + shipping, defaults to `27` |
+| `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `80` |
+| `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to price for non-EU sellers, defaults to `27` |
 
 ### 6. Enable and test the workflow
 

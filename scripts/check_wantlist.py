@@ -235,10 +235,6 @@ def write_readable_state(
     lines.append(
         f"## Marketplace listings currently under EUR {price_limit:.2f} ({len(marketplace_flagged)})"
     )
-    lines.append(
-        "Prices exclude shipping/fees and may be from sellers outside the EU "
-        "(possible VAT/import charges) -- check the listing before buying."
-    )
     lines.append(format_shipping_estimate_caveat(shipping_config))
     lines.append("")
     if marketplace_flagged:
@@ -257,35 +253,28 @@ def write_readable_state(
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
-def compute_shipping_estimates(price: float, shipping_config: dict) -> tuple[float, float]:
-    """Discogs exposes no per-listing shipping cost or seller location for
-    buyers (and no buyer purchase-history endpoint to derive one from), so
-    this applies flat, manually-configured shipping assumptions per seller
-    region instead of anything computed from real data."""
-    eu_total = price + shipping_config["eu_shipping_eur"]
-    non_eu_total = (price + shipping_config["non_eu_shipping_eur"]) * (
-        1 + shipping_config["non_eu_vat_pct"] / 100
-    )
-    return eu_total, non_eu_total
+def compute_non_eu_vat_estimate(price: float, shipping_config: dict) -> float:
+    """Import VAT is the one origin-dependent cost worth flagging automatically
+    (EU sellers charge none; non-EU sellers trigger it on the full customs
+    value). Shipping cost itself isn't estimated -- Discogs exposes neither
+    per-listing shipping/seller data nor a buyer's purchase history to derive
+    it from, so the price limit itself is the shipping buffer instead."""
+    return price * (1 + shipping_config["non_eu_vat_pct"] / 100)
 
 
 def format_estimate_range(info: dict) -> str:
-    parts = []
-    if info.get("estimated_total_eu") is not None:
-        parts.append(f"EU seller ~EUR {info['estimated_total_eu']:.2f}")
-    if info.get("estimated_total_non_eu") is not None:
-        parts.append(f"non-EU seller ~EUR {info['estimated_total_non_eu']:.2f}")
-    return f" (est. total: {' / '.join(parts)})" if parts else ""
+    total = info.get("estimated_total_non_eu_vat")
+    return f" (if non-EU seller, incl. VAT: ~EUR {total:.2f})" if total is not None else ""
 
 
 def format_shipping_estimate_caveat(shipping_config: dict) -> str:
     return (
-        f"'Est. total' assumes flat shipping of EUR {shipping_config['eu_shipping_eur']:.2f} "
-        f"for EU sellers, or EUR {shipping_config['non_eu_shipping_eur']:.2f} shipping plus "
-        f"{shipping_config['non_eu_vat_pct']:.0f}% import VAT (on item + shipping) for non-EU "
-        "sellers -- manually configured assumptions, not per-listing quotes (Discogs's API "
-        "exposes neither real shipping cost nor a buyer's purchase history to derive this "
-        "from). You still need to check the actual listing's seller location."
+        f"If the seller is outside the EU, import VAT (default "
+        f"{shipping_config['non_eu_vat_pct']:.0f}%, Hungary's rate) applies on top of the "
+        "listed price -- shown as 'incl. VAT' above. Shipping cost itself isn't estimated "
+        "(Discogs's API exposes neither per-listing shipping/seller data nor a buyer's "
+        "purchase history to derive it from); the price limit is set with that headroom "
+        "in mind instead. You still need to check the actual listing's seller location."
     )
 
 
@@ -405,12 +394,10 @@ def main() -> None:
         record_discoveries(state, item, versions, today)
 
     shipping_config = {
-        "eu_shipping_eur": float(env("SHIPPING_ESTIMATE_EU_EUR", required=False, default="20")),
-        "non_eu_shipping_eur": float(env("SHIPPING_ESTIMATE_NON_EU_EUR", required=False, default="25")),
         "non_eu_vat_pct": float(env("NON_EU_VAT_PCT", required=False, default="27")),
     }
 
-    price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="100"))
+    price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="80"))
     previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
     currently_flagged: dict[int, dict] = {}
 
@@ -427,13 +414,11 @@ def main() -> None:
             continue
         price = lowest.get("value")
         if price is not None and price <= price_limit:
-            estimated_total_eu, estimated_total_non_eu = compute_shipping_estimates(price, shipping_config)
             currently_flagged[item.release_id] = {
                 "item": item,
                 "price": price,
                 "num_for_sale": num_for_sale,
-                "estimated_total_eu": estimated_total_eu,
-                "estimated_total_non_eu": estimated_total_non_eu,
+                "estimated_total_non_eu_vat": compute_non_eu_vat_estimate(price, shipping_config),
             }
 
     new_marketplace_alerts = {
