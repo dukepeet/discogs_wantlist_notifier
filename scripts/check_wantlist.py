@@ -244,7 +244,7 @@ def write_readable_state(
     if marketplace_flagged:
         for release_id, info in sorted(marketplace_flagged.items(), key=lambda kv: kv[1]["price"]):
             item = info["item"]
-            url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            url = f"https://www.discogs.com/sell/release/{release_id}"
             est = format_estimate_range(info)
             lines.append(
                 f"- {item.artists} - {item.title}: EUR {info['price']:.2f}{est} "
@@ -479,7 +479,7 @@ def main() -> None:
             new_marketplace_alerts.items(), key=lambda kv: (kv[1]["item"].artists, kv[1]["item"].title)
         ):
             item = info["item"]
-            url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            url = f"https://www.discogs.com/sell/release/{release_id}"
             est = format_estimate_range(info)
             lines.append(
                 f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f}{est} "
