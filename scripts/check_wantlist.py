@@ -397,7 +397,7 @@ def main() -> None:
         "non_eu_vat_pct": float(env("NON_EU_VAT_PCT", required=False, default="27")),
     }
 
-    price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="80"))
+    price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR"))
     previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
     currently_flagged: dict[int, dict] = {}
 

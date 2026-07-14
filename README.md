@@ -51,8 +51,10 @@ Every run also checks each wantlist item's marketplace availability via
 Discogs's `marketplace/stats` endpoint, which reports the lowest currently
 listed price for that specific release — already converted to EUR by
 Discogs itself, regardless of what currency the seller listed it in. If it's
-at or under a price limit (default **€80**, set `MARKETPLACE_PRICE_LIMIT_EUR`
-to change it), it's flagged.
+at or under `MARKETPLACE_PRICE_LIMIT_EUR`, it's flagged. There's deliberately
+no built-in default for this one — it's a personal budget decision, not
+something worth silently guessing at — so the workflow fails with a clear
+error if it isn't set (see step 5 below).
 
 Three things worth knowing about this check:
 
@@ -157,7 +159,7 @@ Secrets and variables → Actions**, on separate tabs.
 | `STATE_REPO`          | Your private data repo, as `owner/repo` (e.g. `dukepeet/discogs-wantlist-notifier-data`) |
 | `SMTP_HOST`           | e.g. `smtp.gmail.com`                       |
 | `SMTP_PORT`           | e.g. `587`                                  |
-| `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `80` |
+| `MARKETPLACE_PRICE_LIMIT_EUR` | **Required.** Price limit in EUR for the marketplace check (e.g. `80`) — no default, must be set deliberately |
 | `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to price for non-EU sellers, defaults to `27` |
 
 ### 6. Enable and test the workflow
