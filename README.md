@@ -54,15 +54,23 @@ Discogs itself, regardless of what currency the seller listed it in. If it's
 at or under a price limit (default **€100**, set `MARKETPLACE_PRICE_LIMIT_EUR`
 to change it), it's flagged.
 
-Two things worth knowing about this check:
+Three things worth knowing about this check:
 
 - **The price excludes shipping and fees.** Discogs's public API doesn't
   expose per-listing shipping cost or seller location for buyers (only the
   aggregate lowest price), so there's no reliable way to compute a true
   landed cost automatically — in particular, no way to flag sellers outside
-  the EU where VAT/import charges could apply. Treat the price limit as a
-  first-pass filter and check the actual listing (linked in the email and in
-  `state_readable.md`) before buying.
+  the EU where VAT/import charges could apply. The marketplace listing pages
+  themselves are also behind a Cloudflare bot challenge, so scraping them for
+  real shipping figures isn't something this project does.
+- **"Est. total" is a personal estimate, not a quote.** Each run also pulls
+  your own past Discogs orders (`marketplace/orders`, authenticated as you)
+  and computes the median (shipping ÷ item price) ratio across them, then
+  applies that percentage on top of the listed price as a rough "what
+  shipping+fees usually costs me" adjustment. It's shown next to the raw
+  price in the email and `state_readable.md`, along with how many of your
+  past orders it's based on. If you don't have enough Discogs purchase
+  history, this is simply omitted and only the raw price is shown.
 - **You're only emailed when a release newly drops under the limit**, not
   every week for a listing you've already seen and decided not to buy. The
   full current snapshot (not just new ones) is always in `state_readable.md`

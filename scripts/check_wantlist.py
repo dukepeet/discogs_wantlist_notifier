@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import smtplib
+import statistics
 import sys
 import time
 from dataclasses import dataclass
@@ -151,6 +152,21 @@ class DiscogsClient:
             params={"curr_abbr": currency},
         )
 
+    def get_orders(self) -> list[dict]:
+        orders: list[dict] = []
+        page = 1
+        while True:
+            data = self._get(
+                f"{DISCOGS_API}/marketplace/orders",
+                params={"page": page, "per_page": PER_PAGE},
+            )
+            orders.extend(data.get("orders", []))
+            pagination = data.get("pagination", {})
+            if page >= pagination.get("pages", 1):
+                break
+            page += 1
+        return orders
+
 
 def load_state() -> dict:
     if STATE_PATH.exists():
@@ -170,6 +186,7 @@ def write_readable_state(
     current_release_ids: set[int],
     marketplace_flagged: dict[int, dict],
     price_limit: float,
+    shipping_estimate: dict | None,
 ) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -236,13 +253,24 @@ def write_readable_state(
         "Prices exclude shipping/fees and may be from sellers outside the EU "
         "(possible VAT/import charges) -- check the listing before buying."
     )
+    if shipping_estimate:
+        lines.append(
+            f"'Est. total' assumes a +{shipping_estimate['markup_pct']:.0f}% shipping/fees "
+            f"markup, based on the median of your own {shipping_estimate['sample_size']} past "
+            f"Discogs orders -- a personal rule of thumb, not a per-listing quote."
+        )
     lines.append("")
     if marketplace_flagged:
         for release_id, info in sorted(marketplace_flagged.items(), key=lambda kv: kv[1]["price"]):
             item = info["item"]
             url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            est = (
+                f", est. total EUR {info['estimated_total']:.2f}"
+                if info.get("estimated_total") is not None
+                else ""
+            )
             lines.append(
-                f"- {item.artists} - {item.title}: EUR {info['price']:.2f} "
+                f"- {item.artists} - {item.title}: EUR {info['price']:.2f}{est} "
                 f"({info['num_for_sale']} for sale) -> {url}"
             )
     else:
@@ -250,6 +278,37 @@ def write_readable_state(
     lines.append("")
 
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _order_username(value) -> str | None:
+    if isinstance(value, dict):
+        return value.get("username")
+    if isinstance(value, str):
+        return value.rstrip("/").split("/")[-1] or None
+    return None
+
+
+def estimate_shipping_markup(orders: list[dict], username: str) -> dict | None:
+    """Median (shipping / items subtotal) ratio across the user's own past
+    buyer orders, as a personal stand-in for the shipping cost the public API
+    doesn't expose per marketplace listing."""
+    ratios = []
+    for order in orders:
+        if _order_username(order.get("buyer")) != username:
+            continue
+        items = order.get("items") or []
+        shipping = order.get("shipping") or {}
+        try:
+            item_subtotal = sum(float(i["price"]["value"]) for i in items if i.get("price"))
+            shipping_value = float(shipping["value"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if item_subtotal > 0:
+            ratios.append(shipping_value / item_subtotal)
+
+    if not ratios:
+        return None
+    return {"markup_pct": statistics.median(ratios) * 100, "sample_size": len(ratios)}
 
 
 def record_discoveries(state: dict, item: WantlistItem, versions: list[Version], today: str) -> None:
@@ -367,6 +426,21 @@ def main() -> None:
     for item, versions in new_findings:
         record_discoveries(state, item, versions, today)
 
+    shipping_estimate = None
+    try:
+        print("Fetching your order history to estimate typical shipping cost...")
+        orders = client.get_orders()
+        shipping_estimate = estimate_shipping_markup(orders, username)
+    except requests.HTTPError as e:
+        print(f"    Could not fetch order history: {e}", file=sys.stderr)
+    if shipping_estimate:
+        print(
+            f"Estimated shipping markup: +{shipping_estimate['markup_pct']:.0f}% "
+            f"(based on {shipping_estimate['sample_size']} of your past orders)."
+        )
+    else:
+        print("Not enough order history to estimate a shipping markup.")
+
     price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="100"))
     previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
     currently_flagged: dict[int, dict] = {}
@@ -384,10 +458,14 @@ def main() -> None:
             continue
         price = lowest.get("value")
         if price is not None and price <= price_limit:
+            estimated_total = (
+                price * (1 + shipping_estimate["markup_pct"] / 100) if shipping_estimate else None
+            )
             currently_flagged[item.release_id] = {
                 "item": item,
                 "price": price,
                 "num_for_sale": num_for_sale,
+                "estimated_total": estimated_total,
             }
 
     new_marketplace_alerts = {
@@ -410,6 +488,7 @@ def main() -> None:
         current_release_ids,
         currently_flagged,
         price_limit,
+        shipping_estimate,
     )
 
     lines: list[str] = []
@@ -433,11 +512,22 @@ def main() -> None:
         ):
             item = info["item"]
             url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            est = (
+                f", est. total EUR {info['estimated_total']:.2f}"
+                if info.get("estimated_total") is not None
+                else ""
+            )
             lines.append(
-                f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f} "
+                f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f}{est} "
                 f"({info['num_for_sale']} for sale) -> {url}"
             )
         lines.append("")
+        if shipping_estimate:
+            lines.append(
+                f"'Est. total' assumes a +{shipping_estimate['markup_pct']:.0f}% shipping/fees "
+                f"markup, based on the median of your own {shipping_estimate['sample_size']} past "
+                f"Discogs orders -- a personal rule of thumb, not a per-listing quote."
+            )
         lines.append(
             "Note: prices exclude shipping and fees, and may be from sellers outside the "
             "EU (possible VAT/import charges) -- check the listing before buying."
