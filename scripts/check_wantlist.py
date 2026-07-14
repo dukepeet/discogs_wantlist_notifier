@@ -145,6 +145,12 @@ class DiscogsClient:
             page += 1
         return versions
 
+    def get_marketplace_stats(self, release_id: int, currency: str = "EUR") -> dict:
+        return self._get(
+            f"{DISCOGS_API}/marketplace/stats/{release_id}",
+            params={"curr_abbr": currency},
+        )
+
 
 def load_state() -> dict:
     if STATE_PATH.exists():
@@ -162,6 +168,8 @@ def write_readable_state(
     standalone_items: list[WantlistItem],
     discovered_versions: dict,
     current_release_ids: set[int],
+    marketplace_flagged: dict[int, dict],
+    price_limit: float,
 ) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -219,6 +227,26 @@ def write_readable_state(
             )
     else:
         lines.append("(none found yet)")
+    lines.append("")
+
+    lines.append(
+        f"## Marketplace listings currently under EUR {price_limit:.2f} ({len(marketplace_flagged)})"
+    )
+    lines.append(
+        "Prices exclude shipping/fees and may be from sellers outside the EU "
+        "(possible VAT/import charges) -- check the listing before buying."
+    )
+    lines.append("")
+    if marketplace_flagged:
+        for release_id, info in sorted(marketplace_flagged.items(), key=lambda kv: kv[1]["price"]):
+            item = info["item"]
+            url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            lines.append(
+                f"- {item.artists} - {item.title}: EUR {info['price']:.2f} "
+                f"({info['num_for_sale']} for sale) -> {url}"
+            )
+    else:
+        lines.append("(none right now)")
     lines.append("")
 
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
@@ -339,6 +367,38 @@ def main() -> None:
     for item, versions in new_findings:
         record_discoveries(state, item, versions, today)
 
+    price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="100"))
+    previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
+    currently_flagged: dict[int, dict] = {}
+
+    print(f"Checking marketplace availability for {len(wantlist)} wantlist item(s) (limit: EUR {price_limit:.2f})...")
+    for item in wantlist:
+        try:
+            stats = client.get_marketplace_stats(item.release_id)
+        except requests.HTTPError as e:
+            print(f"    Could not fetch marketplace stats for release {item.release_id}: {e}", file=sys.stderr)
+            continue
+        lowest = stats.get("lowest_price")
+        num_for_sale = stats.get("num_for_sale") or 0
+        if not lowest or num_for_sale == 0:
+            continue
+        price = lowest.get("value")
+        if price is not None and price <= price_limit:
+            currently_flagged[item.release_id] = {
+                "item": item,
+                "price": price,
+                "num_for_sale": num_for_sale,
+            }
+
+    new_marketplace_alerts = {
+        rid: info for rid, info in currently_flagged.items() if rid not in previously_flagged
+    }
+    state["marketplace_flagged_release_ids"] = sorted(currently_flagged.keys())
+    print(
+        f"{len(currently_flagged)} item(s) currently listed under EUR {price_limit:.2f}, "
+        f"{len(new_marketplace_alerts)} new since last run."
+    )
+
     state["standalone_release_ids"] = sorted({item.release_id for item in standalone_items})
     save_state(state)
     current_release_ids = {item.release_id for item in wantlist}
@@ -348,27 +408,57 @@ def main() -> None:
         standalone_items,
         state.get("discovered_versions", {}),
         current_release_ids,
+        currently_flagged,
+        price_limit,
     )
 
-    if not new_findings:
-        print("No new versions found.")
-        return
-
-    lines = ["New versions/reissues found for items on your Discogs wantlist:", ""]
-    for item, versions in new_findings:
-        lines.append(f"{item.artists} - {item.title}")
-        for v in versions:
-            details = " / ".join(
-                p for p in [", ".join(sorted(v.major_formats)), v.format, v.country, v.released] if p
-            )
-            lines.append(f"  - {v.title} ({details}) -> {v.url}")
+    lines: list[str] = []
+    if new_findings:
+        lines.append("New versions/reissues found for items on your Discogs wantlist:")
         lines.append("")
+        for item, versions in new_findings:
+            lines.append(f"{item.artists} - {item.title}")
+            for v in versions:
+                details = " / ".join(
+                    p for p in [", ".join(sorted(v.major_formats)), v.format, v.country, v.released] if p
+                )
+                lines.append(f"  - {v.title} ({details}) -> {v.url}")
+            lines.append("")
+
+    if new_marketplace_alerts:
+        lines.append(f"New marketplace listings under EUR {price_limit:.2f} (excl. shipping/fees):")
+        lines.append("")
+        for release_id, info in sorted(
+            new_marketplace_alerts.items(), key=lambda kv: (kv[1]["item"].artists, kv[1]["item"].title)
+        ):
+            item = info["item"]
+            url = f"https://www.discogs.com/sell/release/{release_id}?ev=rb&currency=EUR"
+            lines.append(
+                f"  - {item.artists} - {item.title}: from EUR {info['price']:.2f} "
+                f"({info['num_for_sale']} for sale) -> {url}"
+            )
+        lines.append("")
+        lines.append(
+            "Note: prices exclude shipping and fees, and may be from sellers outside the "
+            "EU (possible VAT/import charges) -- check the listing before buying."
+        )
+        lines.append("")
+
+    if not lines:
+        print("No new versions or marketplace alerts found.")
+        return
 
     body = "\n".join(lines)
     print(body)
 
+    subject_parts = []
+    if new_findings:
+        subject_parts.append(f"{sum(len(v) for _, v in new_findings)} new version(s)")
+    if new_marketplace_alerts:
+        subject_parts.append(f"{len(new_marketplace_alerts)} listing(s) under EUR {price_limit:.0f}")
+
     send_email(
-        subject=f"Discogs wantlist: {sum(len(v) for _, v in new_findings)} new version(s) found",
+        subject=f"Discogs wantlist: {', '.join(subject_parts)}",
         body=body,
     )
 

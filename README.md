@@ -37,14 +37,36 @@ that release.
 
 `state_readable.md` is regenerated on every run and lists, in plain text,
 every tracked master with its known versions, every wantlist item that has
-no master release yet, and — at the bottom — every version ever discovered
-by the notifier with its discovery date and whether it's currently on your
-wantlist. That last section is a good place to periodically check for
-anything you've found but never gotten around to wantlisting. `state.json`
-remains the machine-readable file the script actually diffs against; the
-readable file is just a mirror for humans and any local edits to it are
-overwritten on the next run. Both files live only in your private data repo,
-never in this (public) code repo.
+no master release yet, every version ever discovered by the notifier with
+its discovery date and whether it's currently on your wantlist, and (see
+below) every wantlist item currently listed for sale under your price limit.
+`state.json` remains the machine-readable file the script actually diffs
+against; the readable file is just a mirror for humans and any local edits
+to it are overwritten on the next run. Both files live only in your private
+data repo, never in this (public) code repo.
+
+### Marketplace price check
+
+Every run also checks each wantlist item's marketplace availability via
+Discogs's `marketplace/stats` endpoint, which reports the lowest currently
+listed price for that specific release — already converted to EUR by
+Discogs itself, regardless of what currency the seller listed it in. If it's
+at or under a price limit (default **€100**, set `MARKETPLACE_PRICE_LIMIT_EUR`
+to change it), it's flagged.
+
+Two things worth knowing about this check:
+
+- **The price excludes shipping and fees.** Discogs's public API doesn't
+  expose per-listing shipping cost or seller location for buyers (only the
+  aggregate lowest price), so there's no reliable way to compute a true
+  landed cost automatically — in particular, no way to flag sellers outside
+  the EU where VAT/import charges could apply. Treat the price limit as a
+  first-pass filter and check the actual listing (linked in the email and in
+  `state_readable.md`) before buying.
+- **You're only emailed when a release newly drops under the limit**, not
+  every week for a listing you've already seen and decided not to buy. The
+  full current snapshot (not just new ones) is always in `state_readable.md`
+  if you want to browse everything currently under the limit.
 
 ## Setup
 
@@ -114,6 +136,7 @@ secret**. Add each of these:
 | `SMTP_PASS`           | SMTP password / app password                |
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
+| `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `100` |
 
 ### 6. Enable and test the workflow
 

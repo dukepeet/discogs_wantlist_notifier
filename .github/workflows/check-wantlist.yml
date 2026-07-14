@@ -36,6 +36,7 @@ jobs:
       - name: Run wantlist check
         env:
           TEST_EMAIL: ${{ (github.event.inputs.test_email == 'true') && '1' || '0' }}
+          MARKETPLACE_PRICE_LIMIT_EUR: ${{ secrets.MARKETPLACE_PRICE_LIMIT_EUR || '100' }}
           STATE_DIR: data
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
