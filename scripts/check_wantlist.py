@@ -30,7 +30,9 @@ PER_PAGE = 100
 
 
 def env(name: str, required: bool = True, default: str | None = None) -> str | None:
-    value = os.environ.get(name, default)
+    # An unset GitHub Actions secret still sets the env var, just to "" --
+    # treat that the same as truly unset so defaults actually apply.
+    value = os.environ.get(name) or default
     if required and not value:
         print(f"ERROR: missing required environment variable {name}", file=sys.stderr)
         sys.exit(1)
