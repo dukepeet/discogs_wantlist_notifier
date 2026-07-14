@@ -58,26 +58,24 @@ Three things worth knowing about this check:
 
 - **The price excludes shipping and fees.** Discogs's public API doesn't
   expose per-listing shipping cost or seller location for buyers (only the
-  aggregate lowest price), so there's no reliable way to compute a true
-  landed cost automatically — in particular, no way to flag sellers outside
-  the EU where VAT/import charges could apply. The marketplace listing pages
-  themselves are also behind a Cloudflare bot challenge, so scraping them for
-  real shipping figures isn't something this project does.
-- **"Est. total" is a personal, region-split estimate, not a quote.** Each run
-  pulls your own past Discogs orders (`marketplace/orders`, authenticated as
-  you) and, for each one, looks up the seller's profile location (cached in
-  `state.json` so each seller is only looked up once, ever). Orders are split
-  into "EU seller" and "non-EU seller" buckets (location matched against a
-  country-name list; UK counts as non-EU post-Brexit), and the median
-  (shipping ÷ item price) ratio is computed separately for each bucket. A
-  flagged listing then shows **both** an EU-seller and a non-EU-seller
-  estimated total side by side, since the marketplace/stats endpoint used to
-  find cheap listings gives no seller info — there's no way to know which
-  bucket actually applies to a *new* listing automatically, so you still need
-  to open the listing to see the seller's real location and pick the right
-  side of the range. Sample sizes for each bucket are always shown. If a
-  bucket has no data (or you don't have enough Discogs purchase history at
-  all), it's simply omitted rather than guessed at.
+  aggregate lowest price) — and, somewhat surprisingly, there's also no API
+  endpoint for a buyer's own purchase history (`marketplace/orders` only
+  works "authenticated as the seller"; this is a long-standing, acknowledged
+  gap in Discogs's API), so there's no way to derive a real shipping estimate
+  from any actual data. The marketplace listing pages themselves are also
+  behind a Cloudflare bot challenge, so scraping them isn't something this
+  project does either.
+- **"Est. total" is a manually configured guess, not a quote.** Since no real
+  shipping data is available from any source, a flagged listing shows two
+  flat, hand-configured estimates side by side: `SHIPPING_ESTIMATE_EU_EUR`
+  (default **€20**) added directly to the price for an EU seller, and
+  `SHIPPING_ESTIMATE_NON_EU_EUR` (default **€22**, plus `NON_EU_VAT_PCT`
+  import VAT — default **27%**, Hungary's rate — applied to price + shipping)
+  for a non-EU seller. There's no way to know which one actually applies to
+  a *new* listing automatically (the marketplace/stats endpoint used to find
+  cheap listings gives no seller info), so you still need to open the
+  listing to see the seller's real location and pick the right side of the
+  range. Adjust the three env vars/secrets to match your own experience.
 - **You're only emailed when a release newly drops under the limit**, not
   every week for a listing you've already seen and decided not to buy. The
   full current snapshot (not just new ones) is always in `state_readable.md`
@@ -152,6 +150,9 @@ secret**. Add each of these:
 | `EMAIL_FROM`          | *(optional)* defaults to `SMTP_USER`        |
 | `EMAIL_TO`            | *(optional)* where to send notifications, defaults to `EMAIL_FROM` (i.e. `SMTP_USER` if that's also unset) |
 | `MARKETPLACE_PRICE_LIMIT_EUR` | *(optional)* price limit in EUR for the marketplace check, defaults to `100` |
+| `SHIPPING_ESTIMATE_EU_EUR` | *(optional)* flat EU-seller shipping estimate, defaults to `20` |
+| `SHIPPING_ESTIMATE_NON_EU_EUR` | *(optional)* flat non-EU-seller shipping estimate, defaults to `22` |
+| `NON_EU_VAT_PCT` | *(optional)* import VAT % applied to non-EU price + shipping, defaults to `27` |
 
 ### 6. Enable and test the workflow
 

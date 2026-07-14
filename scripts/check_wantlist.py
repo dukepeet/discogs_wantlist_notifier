@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import smtplib
-import statistics
 import sys
 import time
 from dataclasses import dataclass
@@ -154,24 +153,6 @@ class DiscogsClient:
             params={"curr_abbr": currency},
         )
 
-    def get_orders(self) -> list[dict]:
-        orders: list[dict] = []
-        page = 1
-        while True:
-            data = self._get(
-                f"{DISCOGS_API}/marketplace/orders",
-                params={"page": page, "per_page": PER_PAGE},
-            )
-            orders.extend(data.get("orders", []))
-            pagination = data.get("pagination", {})
-            if page >= pagination.get("pages", 1):
-                break
-            page += 1
-        return orders
-
-    def get_user_profile(self, username: str) -> dict:
-        return self._get(f"{DISCOGS_API}/users/{username}")
-
 
 def load_state() -> dict:
     if STATE_PATH.exists():
@@ -191,7 +172,7 @@ def write_readable_state(
     current_release_ids: set[int],
     marketplace_flagged: dict[int, dict],
     price_limit: float,
-    shipping_estimate: dict | None,
+    shipping_config: dict,
 ) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -258,9 +239,7 @@ def write_readable_state(
         "Prices exclude shipping/fees and may be from sellers outside the EU "
         "(possible VAT/import charges) -- check the listing before buying."
     )
-    caveat = format_shipping_estimate_caveat(shipping_estimate)
-    if caveat:
-        lines.append(caveat)
+    lines.append(format_shipping_estimate_caveat(shipping_config))
     lines.append("")
     if marketplace_flagged:
         for release_id, info in sorted(marketplace_flagged.items(), key=lambda kv: kv[1]["price"]):
@@ -278,80 +257,16 @@ def write_readable_state(
     STATE_READABLE_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _order_username(value) -> str | None:
-    if isinstance(value, dict):
-        return value.get("username")
-    if isinstance(value, str):
-        return value.rstrip("/").split("/")[-1] or None
-    return None
-
-
-# Substring-matched against a seller's free-text profile location. Deliberately
-# excludes the UK (non-EU for VAT/customs purposes since Brexit).
-EU_COUNTRY_NAMES = {
-    "austria", "belgium", "bulgaria", "croatia", "cyprus", "czech republic", "czechia",
-    "denmark", "estonia", "finland", "france", "germany", "deutschland", "greece",
-    "hungary", "ireland", "italy", "italia", "latvia", "lithuania", "luxembourg",
-    "malta", "netherlands", "holland", "poland", "polska", "portugal", "romania",
-    "slovakia", "slovenia", "spain", "espana", "sweden",
-}
-
-
-def classify_seller_region(location: str | None) -> str:
-    if not location or not location.strip():
-        return "unknown"
-    loc = location.strip().lower()
-    return "eu" if any(name in loc for name in EU_COUNTRY_NAMES) else "non_eu"
-
-
-def estimate_shipping_markup(client: "DiscogsClient", state: dict, orders: list[dict], username: str) -> dict | None:
-    """Median (shipping / items subtotal) ratio across the user's own past buyer
-    orders, split by whether the seller's profile location is in the EU or not
-    (relevant for VAT/import charges) -- a personal stand-in for the per-listing
-    shipping/seller-location data the public API doesn't expose for buyers."""
-    seller_locations: dict = state.setdefault("seller_locations", {})
-    ratios_by_region: dict[str, list[float]] = {"eu": [], "non_eu": []}
-    unknown_count = 0
-
-    for order in orders:
-        if _order_username(order.get("buyer")) != username:
-            continue
-        items = order.get("items") or []
-        shipping = order.get("shipping") or {}
-        try:
-            item_subtotal = sum(float(i["price"]["value"]) for i in items if i.get("price"))
-            shipping_value = float(shipping["value"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if item_subtotal <= 0:
-            continue
-
-        seller_username = _order_username(order.get("seller"))
-        if not seller_username:
-            unknown_count += 1
-            continue
-
-        if seller_username not in seller_locations:
-            try:
-                profile = client.get_user_profile(seller_username)
-                seller_locations[seller_username] = profile.get("location") or ""
-            except requests.HTTPError:
-                seller_locations[seller_username] = ""
-
-        region = classify_seller_region(seller_locations.get(seller_username))
-        ratio = shipping_value / item_subtotal
-        if region == "unknown":
-            unknown_count += 1
-        else:
-            ratios_by_region[region].append(ratio)
-
-    result: dict = {}
-    for region, ratios in ratios_by_region.items():
-        if ratios:
-            result[region] = {"markup_pct": statistics.median(ratios) * 100, "sample_size": len(ratios)}
-    if unknown_count:
-        result["unknown_count"] = unknown_count
-    return result or None
+def compute_shipping_estimates(price: float, shipping_config: dict) -> tuple[float, float]:
+    """Discogs exposes no per-listing shipping cost or seller location for
+    buyers (and no buyer purchase-history endpoint to derive one from), so
+    this applies flat, manually-configured shipping assumptions per seller
+    region instead of anything computed from real data."""
+    eu_total = price + shipping_config["eu_shipping_eur"]
+    non_eu_total = (price + shipping_config["non_eu_shipping_eur"]) * (
+        1 + shipping_config["non_eu_vat_pct"] / 100
+    )
+    return eu_total, non_eu_total
 
 
 def format_estimate_range(info: dict) -> str:
@@ -363,20 +278,14 @@ def format_estimate_range(info: dict) -> str:
     return f" (est. total: {' / '.join(parts)})" if parts else ""
 
 
-def format_shipping_estimate_caveat(shipping_estimate: dict | None) -> str | None:
-    if not shipping_estimate:
-        return None
-    bits = []
-    for region, label in (("eu", "EU sellers"), ("non_eu", "non-EU sellers")):
-        info = shipping_estimate.get(region)
-        if info:
-            bits.append(f"+{info['markup_pct']:.0f}% for {label} ({info['sample_size']} of your past orders)")
-    if not bits:
-        return None
+def format_shipping_estimate_caveat(shipping_config: dict) -> str:
     return (
-        "'Est. total' assumes " + " and ".join(bits) + " -- a personal rule of thumb from your "
-        "own order history, not a per-listing quote. You still need to check the actual "
-        "listing's seller location, since that isn't available for new listings automatically."
+        f"'Est. total' assumes flat shipping of EUR {shipping_config['eu_shipping_eur']:.2f} "
+        f"for EU sellers, or EUR {shipping_config['non_eu_shipping_eur']:.2f} shipping plus "
+        f"{shipping_config['non_eu_vat_pct']:.0f}% import VAT (on item + shipping) for non-EU "
+        "sellers -- manually configured assumptions, not per-listing quotes (Discogs's API "
+        "exposes neither real shipping cost nor a buyer's purchase history to derive this "
+        "from). You still need to check the actual listing's seller location."
     )
 
 
@@ -495,23 +404,11 @@ def main() -> None:
     for item, versions in new_findings:
         record_discoveries(state, item, versions, today)
 
-    shipping_estimate = None
-    try:
-        print("Fetching your order history to estimate typical shipping cost by seller region...")
-        orders = client.get_orders()
-        shipping_estimate = estimate_shipping_markup(client, state, orders, username)
-    except requests.HTTPError as e:
-        print(f"    Could not fetch order history: {e}", file=sys.stderr)
-    if shipping_estimate:
-        for region in ("eu", "non_eu"):
-            info = shipping_estimate.get(region)
-            if info:
-                print(
-                    f"Estimated shipping markup for {region.replace('_', '-')} sellers: "
-                    f"+{info['markup_pct']:.0f}% (based on {info['sample_size']} of your past orders)."
-                )
-    else:
-        print("Not enough order history to estimate a shipping markup.")
+    shipping_config = {
+        "eu_shipping_eur": float(env("SHIPPING_ESTIMATE_EU_EUR", required=False, default="20")),
+        "non_eu_shipping_eur": float(env("SHIPPING_ESTIMATE_NON_EU_EUR", required=False, default="22")),
+        "non_eu_vat_pct": float(env("NON_EU_VAT_PCT", required=False, default="27")),
+    }
 
     price_limit = float(env("MARKETPLACE_PRICE_LIMIT_EUR", required=False, default="100"))
     previously_flagged = set(state.setdefault("marketplace_flagged_release_ids", []))
@@ -530,14 +427,13 @@ def main() -> None:
             continue
         price = lowest.get("value")
         if price is not None and price <= price_limit:
-            eu_info = shipping_estimate.get("eu") if shipping_estimate else None
-            non_eu_info = shipping_estimate.get("non_eu") if shipping_estimate else None
+            estimated_total_eu, estimated_total_non_eu = compute_shipping_estimates(price, shipping_config)
             currently_flagged[item.release_id] = {
                 "item": item,
                 "price": price,
                 "num_for_sale": num_for_sale,
-                "estimated_total_eu": price * (1 + eu_info["markup_pct"] / 100) if eu_info else None,
-                "estimated_total_non_eu": price * (1 + non_eu_info["markup_pct"] / 100) if non_eu_info else None,
+                "estimated_total_eu": estimated_total_eu,
+                "estimated_total_non_eu": estimated_total_non_eu,
             }
 
     new_marketplace_alerts = {
@@ -560,7 +456,7 @@ def main() -> None:
         current_release_ids,
         currently_flagged,
         price_limit,
-        shipping_estimate,
+        shipping_config,
     )
 
     lines: list[str] = []
@@ -590,13 +486,7 @@ def main() -> None:
                 f"({info['num_for_sale']} for sale) -> {url}"
             )
         lines.append("")
-        caveat = format_shipping_estimate_caveat(shipping_estimate)
-        if caveat:
-            lines.append(caveat)
-        lines.append(
-            "Note: prices exclude shipping and fees, and may be from sellers outside the "
-            "EU (possible VAT/import charges) -- check the listing before buying."
-        )
+        lines.append(format_shipping_estimate_caveat(shipping_config))
         lines.append("")
 
     if not lines:
